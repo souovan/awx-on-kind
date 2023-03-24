@@ -15,8 +15,8 @@ pre-req
 4 gb ram
 
 ## Usage
-Install ansible
-Run the playbook awx_on_kind.yaml `ansible-playbook awx_on_kind.yaml -K`
+* Install ansible
+* Run the playbook awx_on_kind.yaml `ansible-playbook awx_on_kind.yaml -K`
 
 ### Debian and Ubuntu
 ```sh
