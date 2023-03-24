@@ -19,6 +19,9 @@ wsl-ubuntu
 * Enter the repo directory `cd awx-on-kind`
 * Run the playbook awx_on_kind.yaml `ansible-playbook awx_on_kind.yaml -K`
 
+
+## How to install Ansible Distros
+
 ### Debian and Ubuntu
 ```sh
 sudo apt update && sudo apt install -y ansible
