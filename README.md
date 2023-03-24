@@ -1,16 +1,15 @@
 Ansible playbook to install AWX on KIND cluster
 
 current working on:
-ubuntu
-debian
-fedora
-centos
+* Ubuntu
+* Debian
+* Fedora
+* CentOS
 
 future: 
 wsl-ubuntu
 
-pre-req
-
+## pre-req
 2 vcpus
 4 gb ram
 
