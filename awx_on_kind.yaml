@@ -1,0 +1,159 @@
+---
+- name: Install and configure AWX on KIND
+  hosts: localhost
+  become: yes
+  tasks:
+
+  - debug:
+      msg: "{{ansible_facts['distribution']}}"
+
+  - name: Upgrade all OS packages (Ubuntu and Debian)
+    apt:
+      name: "*"
+      state: latest
+      autoremove: yes
+      autoclean: yes
+    when: ansible_facts['distribution'] == "Ubuntu" or ansible_facts['distribution'] == "Debian"
+
+  - name: Install curl (Ubuntu and Debian)
+    apt:
+      name: curl
+      state: latest
+    when: ansible_facts['distribution'] == "Ubuntu" or ansible_facts['distribution'] == "Debian"
+    
+  - name: Upgrade all OS packages (Fedora and RHEL)
+    become: yes
+    dnf:
+      name: "*"
+      state: latest
+    when: ansible_facts['distribution'] == "Fedora" or ansible_facts['distribution'] == "RHEL"
+
+  - name: Install curl (Fedora and RHEL)
+    dnf:
+      name: curl
+      state: latest
+    when: ansible_facts['distribution'] == "Fedora" or ansible_facts['distribution'] == "RHEL"
+    
+  - name: Upgrade all OS packages (CentOS)
+    become: yes
+    yum:
+      name: "*"
+      state: latest
+    when: ansible_facts['distribution'] == "CentOS"
+
+  - name: Install curl and git (CentOS)
+    yum:
+      name: 
+        - curl
+        - git
+      state: latest
+    when: ansible_facts['distribution'] == "CentOS"
+
+  - name: Get Docker install script and install it
+    shell: "curl -fsSL https://get.docker.com -o get-docker.sh && chmod +x get-docker.sh && sh get-docker.sh && rm -rf get-docker.sh"
+
+  - name: Start docker service (Ubuntu and Debian)
+    systemd:
+      name: docker
+      enabled: true
+      state: started
+    when: ansible_facts['distribution'] == "Ubuntu" or ansible_facts['distribution'] == "Debian"
+    
+  - name: Start docker service (Fedora and RHEL and CentOS)
+    systemd:
+      name: docker
+      enabled: true
+      state: started
+    when: ansible_facts['distribution'] == "Fedora" or ansible_facts['distribution'] == "RHEL" or ansible_facts['distribution'] == "CentOS"
+
+  - name: Download kubectl
+    shell: curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+
+  - name: Install kubectl (Debian | Ubuntu | Fedora | RHEL)
+    become: yes
+    shell: "install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && rm -rf kubectl"
+    when: ansible_facts['distribution'] == "Ubuntu" or ansible_facts['distribution'] == "Debian" or
+     ansible_facts['distribution'] == "Fedora" or ansible_facts['distribution'] == "RHEL"
+     
+  - name: Install kubectl (CentOS)
+    become: yes
+    shell: "install -o root -g root -m 0755 kubectl /usr/bin/kubectl && rm -rf kubectl"
+    when: ansible_facts['distribution'] == "CentOS"
+
+  - name: Download KIND
+    shell: curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.17.0/kind-linux-amd64
+
+  - name: Install KIND (Debian | Ubuntu | Fedora | RHEL)
+    become: yes
+    shell: "chmod +x ./kind && mv ./kind /usr/local/bin/kind"
+    when: ansible_facts['distribution'] == "Ubuntu" or ansible_facts['distribution'] == "Debian" or
+     ansible_facts['distribution'] == "Fedora" or ansible_facts['distribution'] == "RHEL"
+
+  - name: Install KIND (CentOS)
+    become: yes
+    shell: "chmod +x ./kind && mv ./kind /usr/bin/kind"
+    when: ansible_facts['distribution'] == "CentOS"
+
+  - name: Create HA KIND Cluster (3 workers)
+    shell: "sudo kind create cluster --config=kind_cluster.yaml"
+
+  - name: Download Kustomize
+    shell: "curl -s 'https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh'  | bash"
+
+  - name: Install Kustomize (Debian | Ubuntu | Fedora | RHEL)
+    become: yes
+    shell: "mv kustomize /usr/local/bin"
+    when: ansible_facts['distribution'] == "Ubuntu" or ansible_facts['distribution'] == "Debian" or
+     ansible_facts['distribution'] == "Fedora" or ansible_facts['distribution'] == "RHEL"
+     
+  - name: Install Kustomize (CentOS)
+    become: yes
+    shell: "mv kustomize /usr/bin"
+    when: ansible_facts['distribution'] == "CentOS"
+
+  - name: Apply the awx-operator to the cluster
+    shell: "kustomize build . | sudo kubectl apply -f -"
+
+  - name: Wait for the awx-operator to become available
+    shell: "sudo kubectl wait deployment awx-operator-controller-manager -n awx --for condition=Available=True --timeout=300s"
+
+  - name: Add the awx.yml to kustomization.yaml file
+    copy:
+      src: kustomization_with_awx.yaml
+      dest: kustomization.yaml
+      
+  - name: Apply the awx-kind deployment to the cluster
+    shell: "kustomize build . | sudo kubectl apply -f -"
+
+  - name: Wait 5 minutes
+    pause:
+      minutes: 5
+    
+  - name: Wait to the awx resource to be up and running
+    shell: "sudo kubectl wait deployment -n awx awx-kind --for condition=Available=True --timeout=300s"
+      
+  - name: Expose the cluster loadbalancer port
+    shell: "sudo kubectl expose deployment -n awx awx-kind --type=LoadBalancer --port=30080"
+      
+  - name: Wait 5 minutes
+    pause:
+      minutes: 5
+
+  - name: Wait until expose loadbalancer is working
+    uri:
+      url: "http://{{ansible_default_ipv4.address}}:30080"
+      validate_certs: no
+      follow_redirects: none
+      method: GET
+    register: expose_loadbalancer
+    until: "{{expose_loadbalancer.status}} == 200"
+    retries: 30
+    delay: 10
+
+  - name: Get the AWX Web UI password
+    shell: 'sudo kubectl get secret -n awx awx-kind-admin-password -o jsonpath="{.data.password}" | base64 --decode'
+    register: awx_pass
+    
+  - name: Instruction to access the AWX Web UI
+    debug:
+      msg: "Access http://{{ansible_default_ipv4.address}}:30080 with the username: admin and the password: {{awx_pass.stdout}}"
