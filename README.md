@@ -15,9 +15,11 @@ wsl-ubuntu
 
 ## Usage
 * Install ansible
-* Clone this repo `git clone https://github.com/souovan/awx-on-kind.git`
-* Enter the repo directory `cd awx-on-kind`
-* Run the playbook awx_on_kind.yaml `ansible-playbook awx_on_kind.yaml -K`
+```sh
+git clone https://github.com/souovan/awx-on-kind.git # Clone this repo
+cd awx-on-kind # Enter the repo directory 
+ansible-playbook awx_on_kind.yaml -K # Run the playbook awx_on_kind.yaml 
+```
 
 
 ## How to install Ansible Distros
